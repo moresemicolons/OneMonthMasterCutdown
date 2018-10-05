@@ -6,6 +6,7 @@
 #include "Drivers/timercounter.h"
 #include "Tools/altitude.h"
 #include "tools/RingBuffer.h"
+#include "Drivers/TC_clock.h"
 
 #define COMMS_USART				USARTC0
 #define USART_TX_PIN			IOPORT_CREATE_PIN(PORTC, 3)
@@ -148,7 +149,7 @@ MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor)
 	//Iterate through and check that none of the included measurements are flagged as invalid. If they are, subtract them
 	for (uint8_t i = 0; i < 5; i++)
 	{
-		if (!pressures[i].valid && pressures[i] != high && pressures[i] != low)
+		if (!pressures[i].valid && pressures[i].pressure != high.pressure && pressures[i].pressure != low.pressure)
 		{
 			valid = 0;
 		}
