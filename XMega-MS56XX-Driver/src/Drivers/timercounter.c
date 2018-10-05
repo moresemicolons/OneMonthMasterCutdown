@@ -10,7 +10,7 @@
 #define PRESCALER	1024
 #define fclk		32000000.0f
 
-void TC0_setup(TC0_t* TC, sysclk_port_id sysclk_port, uint8_t pins_to_ctrl)
+void TC0_setup(TC0_t* TC, enum sysclk_port_id sysclk_port, uint8_t pins_to_ctrl)
 /*	TC: pointer to timer counter (e.g. &TCE0)
 	port: pointer to port (e.g. &PORTE)
 	pins_to_ctrl: bitmask where the lower nibble specifies which pins on the port should be controlled by the TC (e.g. 0b1100 for pin 2 and 3)
