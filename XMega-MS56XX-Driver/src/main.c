@@ -166,6 +166,6 @@ MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor)
 	result.pressure = p;
 	result.temperature = T;
 	//TODO: check validity
-	result.valid = 1;
+	result.valid = valid;
 	return result;
 }
