@@ -39,7 +39,6 @@ RingBuffer32_t recentalts;
 
 MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor);
 
-//Example usage of MS5611/07 driver for One Monthers
 int main (void)
 {
 	uint8_t flightstate = 0;
@@ -82,7 +81,8 @@ int main (void)
 		if (flightstate == STATE_PRELAUNCH)
 		{
 			int32_t oldest_alt = rb32_get_nth(&recentalts, rb32_length(&recentalts) - 1);
-			if (rb32_get_nth(&recentalts, 0) - oldest_alt > 200)
+			//Lifted off if more than 2 m/s OR at least 10 m up and some upwards movement over the past second
+			if (alt - oldest_alt > 200 || (alt > alt_initial + 10000 && alt - oldest_alt > 0))
 			{
 				flightstate = STATE_ASCENT;
 				TC_config(&LED_TC0, blinkrate2, 20);
@@ -98,12 +98,17 @@ int main (void)
 				gpio_set_pin_low(HOTWIRE_PIN);
 				
 				flightstate = STATE_DESCENT;
-				TC_config(&LED_TC0, blinkrate2, 20);
+				TC_config(&LED_TC0, blinkrate3, 20);
 			}
 		}
 		else if (flightstate == STATE_DESCENT)
 		{
-			
+			int32_t oldest_alt = rb32_get_nth(&recentalts, rb32_length(&recentalts) - 1);
+			if (rb32_get_nth(&recentalts, 0) - oldest_alt < 100)
+			{
+				flightstate = STATE_LANDED;
+				TC_config(&LED_TC0, blinkrate4, 20);
+			}
 		}
 		else if (flightstate == STATE_LANDED)
 		{
@@ -117,7 +122,6 @@ int main (void)
 		while (time < loop_counter * 100); //Keep to 10 Hz sample rate
 	}
 }
-
 
 MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor)
 {
