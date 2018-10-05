@@ -23,15 +23,15 @@ void TC0_setup(TC0_t* TC, sysclk_port_id sysclk_port, uint8_t pins_to_ctrl)
 	TC->CTRLB = (pins_to_ctrl << 4) | 0b0011; //Control the user-specified pins, and set to single-slope PWM
 }
 
-void TC_config(TC0_t* TC, float freq, uint8_t duty0, uint8_t duty1, uint8_t duty2, uint8_t duty3)
+void TC_config(TC0_t* TC, float freq, uint8_t duty)
 /*	TC: pointer to timer counter (e.g. &TCE0)
 	freq: frequency as a float (e.g. 0.75)
-	dutyx: duty cycle for that pin. Should be set to 0 for uncontrolled pins
+	duty: duty cycle for all controlled pins
 */
 {
 	TC->PER = (uint16_t)(fclk / (PRESCALER * freq) - 1.0f);
-	TC->CCA = duty0 * TC->PER / 100;
-	TC->CCB = duty1 * TC->PER / 100;
-	TC->CCC = duty2 * TC->PER / 100;
-	TC->CCD = duty3 * TC->PER / 100;
+	TC->CCA = duty * TC->PER / 100;
+	TC->CCB = TC->CCA;
+	TC->CCC = TC->CCA;
+	TC->CCD = TC->CCA;
 }

@@ -3,6 +3,8 @@
 #include "drivers/uart_tools.h"
 #include "drivers/SPI.h"
 #include "drivers/MS56XX.h"
+#include "Drivers/timercounter.h"
+#include "Tools/altitude.h"
 
 #define COMMS_USART				USARTC0
 #define USART_TX_PIN			IOPORT_CREATE_PIN(PORTC, 3)
@@ -20,6 +22,15 @@
 #define LED_TC0					TCE0
 #define LED_SYSCLK_PORT			SYSCLK_PORT_E
 
+#define blinkrate1				1.0f
+#define blinkrate2				5.0f
+#define blinkrate3				2.5f
+#define blinkrate4				1.0f
+
+#define CUTDOWN_ALT				30000 //(cm)
+
+#define HOTWIRE_PIN				IOPORT_CREATE_PIN(PORTD, 0)
+
 //Track last 10 altitudes in a circular buffer
 // Altitudes (cm)
 int32_t[NUM_ALTITUDES_TRACKED] altitude_backing_array;
@@ -30,7 +41,7 @@ MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor);
 //Example usage of MS5611/07 driver for One Monthers
 int main (void)
 {
-	uint8_t FLIGHT_STATE
+	uint8_t flightstate = 0;
 	board_init();
 	sysclk_init();
 
@@ -43,27 +54,53 @@ int main (void)
 	calibratePressureSensor(&pressure_sensor);
 	
 	//Initialize altitude buffer and fill it with pressure measurements
+	int32_t alt, alt_initial;
 	void rb32_init(&recentalts, altitude_backing_array, NUM_ALTITUDES_TRACKED);
+	alt_initial = calc_altitude(filtered_5_pressures(&pressure_sensor).pressure);
 	for (uint8_t i = 0; i < rb32_length(&recentalts); i++)
 	{
-		rb32_write(&recentalts, &filtered_5_pressures(&pressure_sensor), 1);
+		alt = calc_altitude(filtered_5_pressures(&pressure_sensor).pressure) - alt_initial;
+		rb32_write(&recentalts, &alt, 1);
 	}
 	
-	while (1)
-	{
-		readMS56XX(&pressure_sensor);
-		printf("Pressure is %" PRIi32 ", temperature is %" PRIi32 ", %s\n", pressure_sensor.data.pressure, pressure_sensor.data.temperature, pressure_sensor.data.valid ? "Valid" : "Not valid");
-		delay_ms(1000);
-	}
+	flightstate = STATE_PRELAUNCH;
+	
 	while (1)
 	{
 		//New pressure sample
 		MS56XX_Data_t data = filtered_5_pressures(&pressure_sensor);
+		alt = calc_altitude(data.pressure) - alt_initial;
 		if (!data.valid)
 		{
 			//Handle the "pressure sensor is broken" case
 		}
 		rb32_write(&recentalts, &(data.pressure), 1);
+		if (flightstate == STATE_PRELAUNCH)
+		{
+			
+		}
+		else if (flightstate == STATE_ASCENT)
+		{
+			if (alt > CUTDOWN_ALT)
+			{
+				TC_config(&LED_TC0, 1.0f, 0);
+				gpio_set_pin_high(HOTWIRE_PIN);
+				delay_s(8);
+				gpio_set_pin_low(HOTWIRE_PIN);
+			}
+		}
+		else if (flightstate == STATE_DESCENT)
+		{
+			
+		}
+		else if (flightstate == STATE_LANDED)
+		{
+			
+		}
+		else
+		{
+			//Should never be here, indicate error somehow
+		}
 	}
 }
 
