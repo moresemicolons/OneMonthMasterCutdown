@@ -45,6 +45,8 @@ int main (void)
 	uint8_t flightstate = 0;
 	board_init();
 	sysclk_init();
+	
+	time = 0;
 
 	UART_computer_init(&COMMS_USART, &PORTC, USART_TX_PIN, USART_RX_PIN);
 	
@@ -66,6 +68,7 @@ int main (void)
 	
 	flightstate = STATE_PRELAUNCH;
 	
+	uint32_t loop_counter = 0;
 	while (1)
 	{
 		//New pressure sample
@@ -78,7 +81,12 @@ int main (void)
 		rb32_write(&recentalts, &(data.pressure), 1);
 		if (flightstate == STATE_PRELAUNCH)
 		{
-			
+			int32_t oldest_alt = rb32_get_nth(&recentalts, rb32_length(&recentalts) - 1);
+			if (rb32_get_nth(&recentalts, 0) - oldest_alt > 200)
+			{
+				flightstate = STATE_ASCENT;
+				TC_config(&LED_TC0, blinkrate2, 20);
+			}
 		}
 		else if (flightstate == STATE_ASCENT)
 		{
@@ -86,8 +94,11 @@ int main (void)
 			{
 				TC_config(&LED_TC0, 1.0f, 0);
 				gpio_set_pin_high(HOTWIRE_PIN);
-				delay_s(8);
+				delay_s(8); //TODO: make sure this is long enough
 				gpio_set_pin_low(HOTWIRE_PIN);
+				
+				flightstate = STATE_DESCENT;
+				TC_config(&LED_TC0, blinkrate2, 20);
 			}
 		}
 		else if (flightstate == STATE_DESCENT)
@@ -96,12 +107,14 @@ int main (void)
 		}
 		else if (flightstate == STATE_LANDED)
 		{
-			
+			//Literally nothing to do. Contemplate the meaning of electrical impulses? 
 		}
 		else
 		{
 			//Should never be here, indicate error somehow
 		}
+		loop_counter++;
+		while (time < loop_counter * 100); //Keep to 10 Hz sample rate
 	}
 }
 
