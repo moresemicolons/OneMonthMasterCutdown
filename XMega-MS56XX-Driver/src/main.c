@@ -15,6 +15,11 @@
 #define STATE_DESCENT			3
 #define STATE_LANDED			4
 
+#define LED_PORT				PORTE
+#define LED_PIN_NUM				0
+#define LED_TC0					TCE0
+#define LED_SYSCLK_PORT			SYSCLK_PORT_E
+
 //Track last 10 altitudes in a circular buffer
 // Altitudes (cm)
 int32_t[NUM_ALTITUDES_TRACKED] altitude_backing_array;
