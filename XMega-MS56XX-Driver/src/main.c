@@ -5,12 +5,13 @@
 #include "drivers/MS56XX.h"
 #include "Drivers/timercounter.h"
 #include "Tools/altitude.h"
+#include "tools/RingBuffer.h"
 
 #define COMMS_USART				USARTC0
 #define USART_TX_PIN			IOPORT_CREATE_PIN(PORTC, 3)
 #define USART_RX_PIN			IOPORT_CREATE_PIN(PORTC, 2)
 #define PRESSURE_SELECT_PIN		IOPORT_CREATE_PIN(PORTC, 4)
-#define NUM_ALTITUDES_TRACKED	10
+#define NUM_ALTITUDES_TRACKED 	10
 
 #define STATE_PRELAUNCH			1
 #define STATE_ASCENT			2
@@ -33,8 +34,8 @@
 
 //Track last 10 altitudes in a circular buffer
 // Altitudes (cm)
-int32_t[NUM_ALTITUDES_TRACKED] altitude_backing_array;
-RingBuffer32 recentalts;
+int32_t altitude_backing_array[NUM_ALTITUDES_TRACKED];
+RingBuffer32_t recentalts;
 
 MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor);
 
@@ -55,7 +56,7 @@ int main (void)
 	
 	//Initialize altitude buffer and fill it with pressure measurements
 	int32_t alt, alt_initial;
-	void rb32_init(&recentalts, altitude_backing_array, NUM_ALTITUDES_TRACKED);
+	rb32_init(&recentalts, altitude_backing_array, NUM_ALTITUDES_TRACKED);
 	alt_initial = calc_altitude(filtered_5_pressures(&pressure_sensor).pressure);
 	for (uint8_t i = 0; i < rb32_length(&recentalts); i++)
 	{
@@ -107,7 +108,7 @@ int main (void)
 
 MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor)
 {
-	int32_t pressures[5];
+	MS56XX_Data_t pressures[5];
 	for (uint8_t i = 0; i < 5; i++)
 	{
 		readMS56XX(sensor);
@@ -127,7 +128,7 @@ MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor)
 		}
 	}
 	//Pressure and temperature are an average of the results without the top and bottom values
-	int32_t p, T;
+	int32_t p = 0, T = 0;
 	for (uint8_t i = 0; i < 5; i++)
 	{
 		p += pressures[i].pressure;

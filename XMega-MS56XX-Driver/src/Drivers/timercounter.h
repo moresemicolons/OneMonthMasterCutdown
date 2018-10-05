@@ -7,7 +7,7 @@
 
 
 #ifndef TIMERCOUNTER_H_
-#define 
+#define TIMERCOUNTER_H_
 
 #include <asf.h>
 

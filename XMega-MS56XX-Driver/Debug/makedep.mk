@@ -10,6 +10,8 @@ src\Drivers\MS56XX.c
 
 src\Drivers\SPI.c
 
+src\Drivers\timercounter.c
+
 src\Drivers\uart_tools.c
 
 src\Tools\RingBuffer.c
