@@ -144,6 +144,15 @@ MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor)
 			high = pressures[i];
 		}
 	}
+	uint8_t valid = 1;
+	//Iterate through and check that none of the included measurements are flagged as invalid. If they are, subtract them
+	for (uint8_t i = 0; i < 5; i++)
+	{
+		if (!pressures[i].valid && pressures[i] != high && pressures[i] != low)
+		{
+			valid = 0;
+		}
+	}
 	//Pressure and temperature are an average of the results without the top and bottom values
 	int32_t p = 0, T = 0;
 	for (uint8_t i = 0; i < 5; i++)
