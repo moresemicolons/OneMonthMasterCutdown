@@ -350,6 +350,9 @@
     <Compile Include="src\Drivers\uart_tools.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\Tools\altitude.c">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\Tools\altitude.h">
       <SubType>compile</SubType>
     </Compile>

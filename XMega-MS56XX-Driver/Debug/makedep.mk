@@ -14,6 +14,8 @@ src\Drivers\timercounter.c
 
 src\Drivers\uart_tools.c
 
+src\Tools\altitude.c
+
 src\Tools\RingBuffer.c
 
 src\ASF\common\utils\stdio\write.c
