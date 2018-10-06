@@ -55,7 +55,8 @@ src/main.d src/main.o: ../src/main.c ../src/asf.h \
  ../src/ASF/xmega/drivers/usart/usart.h ../src/config/conf_usart_serial.h \
  ../src/drivers/uart_tools.h ../src/drivers/SPI.h ../src/drivers/MS56XX.h \
  ../src/drivers/SPI.h ../src/Drivers/timercounter.h \
- ../src/Tools/altitude.h ../src/tools/RingBuffer.h
+ ../src/Tools/altitude.h ../src/tools/RingBuffer.h \
+ ../src/Drivers/TC_clock.h
 
 ../src/asf.h:
 
@@ -192,3 +193,5 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\avr8\avr8-gnu-toolchain\lib\
 ../src/Tools/altitude.h:
 
 ../src/tools/RingBuffer.h:
+
+../src/Drivers/TC_clock.h:
