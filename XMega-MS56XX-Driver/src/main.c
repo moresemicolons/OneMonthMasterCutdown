@@ -6,11 +6,25 @@
 #include "Drivers/timercounter.h"
 #include "Tools/altitude.h"
 #include "tools/RingBuffer.h"
-#include "Drivers/TC_clock.h"
 
+//#define COMPUTER_USART   	//Disable this for flight
+#define SD_USART			//Enable this for flight
+
+#ifdef SD_USART
+#define COMMS_USART				USARTC0
+#define USART_TX_PIN			IOPORT_CREATE_PIN(PORTC, 3)
+#define USART_RX_PIN			IOPORT_CREATE_PIN(PORTC, 2)
+#define USART_PORT				PORTC
+#endif
+
+#ifdef COMPUTER_USART
 #define COMMS_USART				USARTE0
 #define USART_TX_PIN			IOPORT_CREATE_PIN(PORTE, 3)
 #define USART_RX_PIN			IOPORT_CREATE_PIN(PORTE, 2)
+#define USART_PORT				PORTE
+#endif
+
+
 #define PRESSURE_SELECT_PIN		IOPORT_CREATE_PIN(PORTC, 4)
 #define NUM_ALTITUDES_TRACKED 	20
 
@@ -18,18 +32,29 @@
 #define STATE_ASCENT			2
 #define STATE_DESCENT			3
 #define STATE_LANDED			4
+#define STATE_CUTDOWN			99
 
 #define LED_PORT				PORTE
 #define LED_PIN_NUM				0
 #define LED_TC0					TCE0
 #define LED_SYSCLK_PORT			SYSCLK_PORT_E
 
-#define blinkrate1				1.0f
-#define blinkrate2				5.0f
-#define blinkrate3				2.5f
-#define blinkrate4				1.0f
+#define blinkratePrelaunch				0.5f
+#define blinkdutyPrelaunch				0.05f
+#define blinkrateAscent					1.0f
+#define blinkdutyAscent					0.1f
+#define blinkrateCutdown				5.0f
+#define blinkdutyCutdown				0.1f
+#define blinkrateDescent				2.0f
+#define blinkdutyDescent				0.25f
+#define blinkrateLanded					1.0f
+#define blinkdutyLanded					0.5f
+#define blinkrateError					10.0f
+#define blinkdutyError					0.9f
 
-#define CUTDOWN_ALT				30000 //(cm)
+#define CUTDOWN_ALT				35000	//(cm)
+#define CUTDOWN_TIME			8		//(s)
+#define CUTDOWN_RESTART_DELAY	30		//(s)
 
 #define HOTWIRE_PIN				IOPORT_CREATE_PIN(PORTA, 0)
 
@@ -40,21 +65,26 @@ RingBuffer32_t recentalts;
 
 MS56XX_Data_t filtered_5_pressures(MS56XX_t* sensor);
 
+bool hotwire_en = true;
+uint32_t cutdown_start_time = 0;
+
 int main (void)
 {
 	uint8_t flightstate = 0;
 	board_init();
 	sysclk_init();
 	
-	time = 0;
+	uint32_t time = 0;
+	
 	
 	TC0_setup(&LED_TC0, LED_SYSCLK_PORT, 0b0001);
 	
 	PORTE.DIRSET= 0b00000001;
+	PORTA.DIRSET= 0b00000001;
 	
-	TC_config(&LED_TC0, 10, 20);
+	TC_config(&LED_TC0, blinkrateError, blinkdutyError);
 
-	UART_computer_init(&COMMS_USART, &PORTE, USART_TX_PIN, USART_RX_PIN);
+	UART_computer_init(&COMMS_USART, &USART_PORT, USART_TX_PIN, USART_RX_PIN);
 	
 	printf("Initializing...\n");
 	
@@ -79,35 +109,42 @@ int main (void)
 	
 	flightstate = STATE_PRELAUNCH;
 	
-	TC_config(&LED_TC0, 0.5, 20);
+	TC_config(&LED_TC0, blinkratePrelaunch, blinkdutyPrelaunch);
 	
 	uint32_t loop_counter = 0;
 	while (1)
 	{
+		//Hacky timer, should be in seconds +/- 5%
+		time = (loop_counter*90)/570;
 		//New pressure sample
 		MS56XX_Data_t data = filtered_5_pressures(&pressure_sensor);
 		alt = calc_altitude(data.pressure) - alt_initial;
 		if (!data.valid)
 		{
 			//Handle the "pressure sensor is broken" case
-			TC_config(&LED_TC0, 10, 20);
+			TC_config(&LED_TC0, blinkrateError, blinkdutyError);
 			printf("MS5607 Data Invalid!\n");
+			hotwire_en = false;
 		}
+		else
+		{
+			hotwire_en = true;
+		}
+		
 		rb32_write(&recentalts, &(alt), 1);
+		printf("time: %li, ",time);
 		printf("alt: %li, ",alt);
 		printf("pres: %li, ",data.pressure);
 		if (flightstate == STATE_PRELAUNCH)
 		{	
 			int32_t oldest_alt = rb32_get_nth(&recentalts, rb32_length(&recentalts) - 1);
-			printf("oldest_alt: %li, ", oldest_alt);
-			printf("alt - oldest_alt: %li, ",alt - oldest_alt);
 			printf("state: PRELAUNCH\n");
 			
 			//Lifted off if more than 2 m/s OR at least 10 m up and some upwards movement over the past second
 			if (alt - oldest_alt > 1000 || (alt > 6000 && alt - oldest_alt > 0))
 			{
 				flightstate = STATE_ASCENT;
-				TC_config(&LED_TC0, blinkrate2, 20);
+				TC_config(&LED_TC0, blinkrateAscent, blinkdutyAscent);
 				printf("\n\nAscent!\n\n");
 			}
 		}
@@ -117,13 +154,22 @@ int main (void)
 			if (alt > CUTDOWN_ALT)
 			{
 				printf("\n\nCutdown!\n\n");
-				TC_config(&LED_TC0, 1.0f, 0);
-				gpio_set_pin_high(HOTWIRE_PIN);
-				delay_s(8); //TODO: make sure this is long enough
+				flightstate = STATE_CUTDOWN;
+				cutdown_start_time = time;
+				TC_config(&LED_TC0, blinkrateCutdown, blinkdutyCutdown);
+			}
+		}
+		else if (flightstate == STATE_CUTDOWN)
+		{
+			printf("state: CUTDOWN\n");
+			gpio_set_pin_high(HOTWIRE_PIN);
+			
+			if(time > cutdown_start_time + CUTDOWN_TIME)			
+			{	
 				gpio_set_pin_low(HOTWIRE_PIN);
 				
 				flightstate = STATE_DESCENT;
-				TC_config(&LED_TC0, blinkrate3, 20);
+				TC_config(&LED_TC0, blinkrateDescent, blinkdutyDescent);
 				printf("\n\nDescent!\n\n");
 			}
 		}
@@ -134,18 +180,36 @@ int main (void)
 			if (rb32_get_nth(&recentalts, 0) - oldest_alt < 100)
 			{
 				flightstate = STATE_LANDED;
-				TC_config(&LED_TC0, blinkrate4, 20);
+				TC_config(&LED_TC0, blinkrateLanded, blinkdutyLanded);
 				printf("\n\nLanded!\n\n");
+			}
+			if (alt > CUTDOWN_ALT+5000 && alt - oldest_alt > 0 && hotwire_en && time > cutdown_start_time + CUTDOWN_RESTART_DELAY)
+			{
+				printf("Still ascending! Restart cutdown!");
+				flightstate = STATE_CUTDOWN;
+				cutdown_start_time = time;
+				TC_config(&LED_TC0, blinkrateCutdown, blinkdutyCutdown);
 			}
 		}
 		else if (flightstate == STATE_LANDED)
 		{
 			printf("state: LANDED\n");
+			
+			int32_t oldest_alt = rb32_get_nth(&recentalts, rb32_length(&recentalts) - 1);
+			if (alt > CUTDOWN_ALT+5000 && alt - oldest_alt > 0 && hotwire_en && time > cutdown_start_time + CUTDOWN_RESTART_DELAY)
+			{
+				printf("Still ascending! Restart cutdown!");
+				flightstate = STATE_CUTDOWN;
+				cutdown_start_time = time;
+				TC_config(&LED_TC0, blinkrateCutdown, blinkdutyCutdown);
+			}
 			//Literally nothing to do. Contemplate the meaning of electrical impulses? 
 		}
 		else
 		{
 			//Should never be here, indicate error somehow
+			TC_config(&LED_TC0, blinkrateError, blinkdutyError);
+			printf("Invalid State! (how?!?!)\n");
 		}
 		loop_counter++;
 		//while (time < loop_counter * 100); //Keep to 10 Hz sample rate
